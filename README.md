@@ -246,6 +246,29 @@ When troubleshooting API issues, check the following:
 - This server does not implement authentication. If deploying to production, consider adding appropriate security measures.
 - Financial data should be verified with official sources for critical decision-making.
 
+## Releases
+
+The SEC EDGAR MCP Server is built and released automatically using GitHub Actions. Releases are available for:
+
+- Windows (x64)
+- macOS (Apple Silicon/ARM64)
+
+Each release includes self-contained executables that don't require .NET to be installed on the target machine.
+
+### Creating a Release
+
+Releases can be triggered in two ways:
+
+1. **Tag-based release**: Push a tag with the format `v*` (e.g., `v1.0.0`) to the repository
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+2. **Manual release**: Trigger the "Build and Release" workflow manually from the GitHub Actions tab and specify a version number
+
+The GitHub Actions workflow will build the application for all supported platforms, create archives, and publish them as release assets.
+
 ## Contributing
 
 Contributions to improve the SEC EDGAR MCP Server are welcome! Here's how you can contribute:
