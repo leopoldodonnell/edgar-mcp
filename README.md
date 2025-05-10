@@ -1,8 +1,16 @@
 # SEC EDGAR MCP Server
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 This is a .NET-based MCP (Model Context Protocol) server that enables AI assistants to access the SEC EDGAR database through its API. The server provides a standardized interface for AI assistants to retrieve company information, SEC filings, and financial statement data.
 
 **Note:** This server uses stdio (standard input/output) for communication, making it easier to integrate with AI assistants that spawn child processes.
+
+## Disclaimer
+
+This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages or other liability, whether in an action of contract, tort or otherwise, arising from, out of or in connection with the software or the use or other dealings in the software.
+
+This project is not affiliated with, endorsed by, or sponsored by the U.S. Securities and Exchange Commission (SEC). All data retrieved through this tool is subject to the SEC's terms of service and usage policies.
 
 ## Features
 
@@ -214,12 +222,73 @@ For Claude AI assistant, you can configure the Edgar MCP server in your Claude s
 
 The AI assistant will spawn the server as a child process and communicate with it via stdio.
 
+## SEC EDGAR API Information
+
+This project uses the SEC EDGAR API v1.0 (as of May 2025). The SEC EDGAR API provides access to company filings and financial data through several endpoints:
+
+- **Company Facts API**: `https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json`
+- **Company Concept API**: `https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/us-gaap/{concept}.json`
+- **Submissions API**: `https://data.sec.gov/submissions/CIK{cik}.json`
+
+For detailed information about the SEC EDGAR API, please refer to the official documentation:
+- [SEC EDGAR API Documentation](https://www.sec.gov/edgar/sec-api-documentation)
+- [SEC Data Delivery APIs](https://www.sec.gov/edgar/sec-api-documentation)
+
+When troubleshooting API issues, check the following:
+1. Ensure your User-Agent header is properly configured with your contact information
+2. Verify you're not exceeding the SEC's rate limits (10 requests per second)
+3. Confirm the CIK number is properly formatted with leading zeros (10 digits total)
+4. Check the SEC's [EDGAR System Status](https://www.sec.gov/edgar/system-status) for any outages
+
 ## Important Notes
 
 - The SEC EDGAR API has rate limits and usage guidelines. Please review the [SEC's API documentation](https://www.sec.gov/edgar/sec-api-documentation) for details.
 - This server does not implement authentication. If deploying to production, consider adding appropriate security measures.
 - Financial data should be verified with official sources for critical decision-making.
 
+## Contributing
+
+Contributions to improve the SEC EDGAR MCP Server are welcome! Here's how you can contribute:
+
+1. **Fork the repository**: Click the Fork button at the top right of the repository page
+2. **Clone your fork**: `git clone https://github.com/YOUR_USERNAME/edgar-mcp.git`
+3. **Create a branch**: `git checkout -b feature/your-feature-name`
+4. **Make your changes**: Implement your feature or bug fix
+5. **Test your changes**: Ensure your changes don't break existing functionality
+6. **Commit your changes**: `git commit -m "Add your commit message here"`
+7. **Push to your fork**: `git push origin feature/your-feature-name`
+8. **Submit a pull request**: Go to the original repository and click "New Pull Request"
+
+Please ensure your code follows the existing style and includes appropriate tests. All pull requests should be made against the `main` branch.
+
+### Pull Request Guidelines
+
+- Provide a clear description of the changes in your PR
+- Include any relevant issue numbers in the PR description
+- Update documentation as needed
+- Add or update tests as appropriate
+- Ensure all tests pass before submitting
+
 ## License
 
-MIT
+MIT License
+
+Copyright (c) 2025 Leopold O'Donnell
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
