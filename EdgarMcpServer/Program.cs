@@ -1,3 +1,4 @@
+using EdgarMcpServer.Models;
 using EdgarMcpServer.Services;
 using EdgarMcpServer.Tools;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,7 +29,7 @@ namespace EdgarMcpServer
             builder.Services
                 .AddMcpServer()
                 .WithStdioServerTransport()
-                .WithToolsFromAssembly();
+                .WithTools<EdgarTools>();
 
             // Build and run the host
             var host = builder.Build();
