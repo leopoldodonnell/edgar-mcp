@@ -165,10 +165,10 @@ jobs:
 
       - name: Create GitHub Release
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: Edgar MCP ${{ steps.version.outputs.version }}
+          name: SEC EDGAR MCP Server ${{ steps.version.outputs.version }}
           body: |
             # Edgar MCP ${{ steps.version.outputs.version }}
             
@@ -210,29 +210,10 @@ jobs:
             Compare the output with the checksums provided in the `checksums.txt` file attached to this release.
           draft: false
           prerelease: false
+          generate_release_notes: true
           files: |
             ${{ github.workspace }}/artifacts/edgar-mcp-*.tar.gz
             ${{ github.workspace }}/artifacts/edgar-mcp-*.zip
             ${{ github.workspace }}/artifacts/checksums.txt
-        run: |
-          if [ "${{ github.event_name }}" == "push" ]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
-          else
-            VERSION=${{ github.event.inputs.version }}
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          name: SEC EDGAR MCP Server v${{ steps.version.outputs.version }}
-          tag_name: ${{ github.event_name == 'push' && github.ref || format('v{0}', github.event.inputs.version) }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          files: |
-            ./artifacts/edgar-mcp-windows/*.zip
-            ./artifacts/edgar-mcp-macos/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
