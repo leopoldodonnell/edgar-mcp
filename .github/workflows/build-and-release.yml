@@ -67,7 +67,7 @@ jobs:
             -p:DebugType=None \
             -p:DebugSymbols=false \
             -p:SuppressTrimAnalysisWarnings=true \
-            -p:Version=${{ github.ref_name && github.ref_name != '' && startsWith(github.ref_name, 'v') && github.ref_name || '0.0.0' }} \
+            -p:Version=${{ (github.ref_name && startsWith(github.ref_name, 'v') && github.ref_name) || '0.0.0' }} \
             -o ./publish/${{ matrix.output_name }}
             
           # Make the binary executable on Unix-like systems
