@@ -21,13 +21,22 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest, ubuntu-latest, macos-latest]
         include:
           - os: windows-latest
-            output_name: edgar-mcp-windows
+            output_name: edgar-mcp-windows-x64
             runtime: win-x64
+          - os: ubuntu-latest
+            output_name: edgar-mcp-linux-x64
+            runtime: linux-x64
+          - os: ubuntu-latest
+            output_name: edgar-mcp-linux-arm64
+            runtime: linux-arm64
           - os: macos-latest
-            output_name: edgar-mcp-macos
+            output_name: edgar-mcp-osx-x64
+            runtime: osx-x64
+          - os: macos-latest
+            output_name: edgar-mcp-osx-arm64
             runtime: osx-arm64
 
     steps:
@@ -42,42 +51,60 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore ./EdgarMcpServer/EdgarMcpServer.csproj
 
-      - name: Build (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Build
         run: |
-          dotnet publish ./EdgarMcpServer/EdgarMcpServer.csproj -c Release -r ${{ matrix.runtime }} --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -p:SuppressTrimAnalysisWarnings=true -o ./publish/${{ matrix.output_name }}
+          # Create output directory
+          mkdir -p ./publish/${{ matrix.output_name }}
           
-      - name: Build (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
+          # Build the application
           dotnet publish ./EdgarMcpServer/EdgarMcpServer.csproj \
-          --configuration Release \
-          --runtime ${{ matrix.runtime }} \
-          --self-contained true \
-          -p:PublishSingleFile=true \
-          -p:PublishTrimmed=true \
-          -p:IncludeNativeLibrariesForSelfExtract=true \
-          -p:DebugType=None \
-          -p:DebugSymbols=false \
-          -p:SuppressTrimAnalysisWarnings=true \
-          -o ./publish/${{ matrix.output_name }}
+            --configuration Release \
+            --runtime ${{ matrix.runtime }} \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:PublishTrimmed=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -p:SuppressTrimAnalysisWarnings=true \
+            -p:Version=${{ github.ref_name && github.ref_name != '' && startsWith(github.ref_name, 'v') && github.ref_name || '0.0.0' }} \
+            -o ./publish/${{ matrix.output_name }}
+            
+          # Make the binary executable on Unix-like systems
+          if [ "${{ matrix.os }}" != "windows-latest" ]; then
+            chmod +x ./publish/${{ matrix.output_name }}/EdgarMcpServer
+          fi
 
       - name: Create archive (Windows)
         if: matrix.os == 'windows-latest'
-        run: Compress-Archive -Path "./publish/${{ matrix.output_name }}/*" -DestinationPath "./publish/${{ matrix.output_name }}.zip"
-
-      - name: Create archive (macOS)
-        if: matrix.os == 'macos-latest'
         run: |
-          cd ./publish
-          tar -czvf ${{ matrix.output_name }}.tar.gz ${{ matrix.output_name }}
+          $version = if ($env:GITHUB_REF -match 'refs/tags/v(\d+\.\d+\.\d+)') { $matches[1] } else { '0.0.0' }
+          $archiveName = "edgar-mcp-windows-x64-v$version"
+          mkdir -p "${{ github.workspace }}/artifacts"
+          Compress-Archive -Path "./publish/${{ matrix.output_name }}/*" -DestinationPath "${{ github.workspace }}/artifacts/$archiveName.zip"
+
+      - name: Create archive (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          version=${GITHUB_REF#refs/tags/v}
+          if [ "$version" = "$GITHUB_REF" ]; then
+            version="0.0.0"
+          fi
+          
+          # Create artifacts directory
+          mkdir -p "${{ github.workspace }}/artifacts"
+          
+          # For macOS and Linux, use .tar.gz
+          archive_name="edgar-mcp-${{ matrix.runtime }}-v$version"
+          tar -czf "${{ github.workspace }}/artifacts/$archive_name.tar.gz" -C "./publish/${{ matrix.output_name }}" .
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.output_name }}
-          path: ./publish/${{ matrix.output_name }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
+          name: artifacts
+          path: ${{ github.workspace }}/artifacts/
           if-no-files-found: error
+          retention-days: 1
 
   release:
     name: Create Release
@@ -99,6 +126,94 @@ jobs:
 
       - name: Determine version
         id: version
+        run: |
+          # Extract version from tag if available, otherwise use '0.0.0'
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION="0.0.0"
+          fi
+          
+          # Set outputs
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          
+          # Log the determined version
+          echo "Using version: $VERSION"
+
+      - name: Verify Artifacts
+        run: |
+          echo "Artifacts directory contents:"
+          ls -la ${{ github.workspace }}/artifacts/
+          
+          echo "\nArtifact files to be uploaded:"
+          find ${{ github.workspace }}/artifacts/ -type f -name "*.tar.gz" -o -name "*.zip" | xargs ls -la
+          
+          # Generate SHA256 checksums
+          echo "Generating SHA256 checksums..."
+          cd ${{ github.workspace }}/artifacts/
+          find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec shasum -a 256 {} \; > checksums.txt
+          
+          echo "\nGenerated checksums:"
+          cat checksums.txt
+          
+          # Verify at least one file exists
+          if [ ! -s checksums.txt ]; then
+            echo "Error: No artifact files found or checksums could not be generated!"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Edgar MCP ${{ steps.version.outputs.version }}
+          body: |
+            # Edgar MCP ${{ steps.version.outputs.version }}
+            
+            ## ⚠️ Security Notice ⚠️
+            
+            These are **unsigned binaries** provided for convenience. For maximum security, we recommend:
+            
+            1. **Verify the source code** - Review the source code at [github.com/${{ github.repository }}](https://github.com/${{ github.repository }}) to ensure it meets your security requirements.
+            2. **Build from source** - For production use, we strongly recommend building the application yourself:
+               ```bash
+               git clone https://github.com/${{ github.repository }}.git
+               cd edgar-mcp
+               dotnet publish -c Release -r <RUNTIME_IDENTIFIER> --self-contained true -p:PublishSingleFile=true
+               ```
+            3. **Verify hashes** - Always verify the SHA256 checksums of downloaded binaries against the source.
+            
+            ## 📥 Downloads
+            
+            ### Pre-built Binaries (Unsigned)
+            
+            - **Windows (x64)**: [edgar-mcp-windows-x64-v${{ steps.version.outputs.version }}.zip](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/edgar-mcp-windows-x64-v${{ steps.version.outputs.version }}.zip)
+            - **macOS (Intel)**: [edgar-mcp-osx-x64-v${{ steps.version.outputs.version }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/edgar-mcp-osx-x64-v${{ steps.version.outputs.version }}.tar.gz)
+            - **macOS (Apple Silicon)**: [edgar-mcp-osx-arm64-v${{ steps.version.outputs.version }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/edgar-mcp-osx-arm64-v${{ steps.version.outputs.version }}.tar.gz)
+            - **Linux (x64)**: [edgar-mcp-linux-x64-v${{ steps.version.outputs.version }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/edgar-mcp-linux-x64-v${{ steps.version.outputs.version }}.tar.gz)
+            - **Linux (ARM64)**: [edgar-mcp-linux-arm64-v${{ steps.version.outputs.version }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/edgar-mcp-linux-arm64-v${{ steps.version.outputs.version }}.tar.gz)
+            
+            ### Verifying Downloads
+            
+            You can verify the integrity of downloaded files using the SHA256 checksums provided below. To generate a checksum:
+            
+            ```bash
+            # On macOS/Linux
+            shasum -a 256 <filename>
+            
+            # On Windows (PowerShell)
+            Get-FileHash -Algorithm SHA256 <filename>
+            ```
+            
+            Compare the output with the checksums provided in the `checksums.txt` file attached to this release.
+          draft: false
+          prerelease: false
+          files: |
+            ${{ github.workspace }}/artifacts/edgar-mcp-*.tar.gz
+            ${{ github.workspace }}/artifacts/edgar-mcp-*.zip
+            ${{ github.workspace }}/artifacts/checksums.txt
         run: |
           if [ "${{ github.event_name }}" == "push" ]; then
             VERSION=${GITHUB_REF#refs/tags/v}
