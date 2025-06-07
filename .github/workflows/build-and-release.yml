@@ -57,6 +57,12 @@ jobs:
           mkdir -p ./publish/${{ matrix.output_name }}
           
           # Build the application
+          # Extract version from tag (remove 'v' prefix if present)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          if [ "$VERSION" = "$GITHUB_REF" ]; then
+            VERSION="0.0.0"
+          fi
+          
           dotnet publish ./EdgarMcpServer/EdgarMcpServer.csproj \
             --configuration Release \
             --runtime ${{ matrix.runtime }} \
@@ -67,7 +73,7 @@ jobs:
             -p:DebugType=None \
             -p:DebugSymbols=false \
             -p:SuppressTrimAnalysisWarnings=true \
-            -p:Version=${{ (github.ref_name && startsWith(github.ref_name, 'v') && github.ref_name) || '0.0.0' }} \
+            -p:Version=$VERSION \
             -o ./publish/${{ matrix.output_name }}
             
           # Make the binary executable on Unix-like systems
