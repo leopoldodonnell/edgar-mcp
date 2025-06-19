@@ -52,6 +52,7 @@ jobs:
         run: dotnet restore ./EdgarMcpServer/EdgarMcpServer.csproj
 
       - name: Build
+        if: matrix.os != 'windows-latest'
         run: |
           # Create output directory
           mkdir -p ./publish/${{ matrix.output_name }}
@@ -77,9 +78,33 @@ jobs:
             -o ./publish/${{ matrix.output_name }}
             
           # Make the binary executable on Unix-like systems
-          if [ "${{ matrix.os }}" != "windows-latest" ]; then
-            chmod +x ./publish/${{ matrix.output_name }}/EdgarMcpServer
-          fi
+          chmod +x ./publish/${{ matrix.output_name }}/EdgarMcpServer
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          # Create output directory
+          New-Item -ItemType Directory -Force -Path "./publish/${{ matrix.output_name }}" | Out-Null
+          
+          # Extract version from tag (remove 'v' prefix if present)
+          $version = $env:GITHUB_REF -replace '^refs/tags/v', ''
+          if ($version -eq $env:GITHUB_REF) {
+            $version = "0.0.0"
+          }
+          
+          dotnet publish ./EdgarMcpServer/EdgarMcpServer.csproj `
+            --configuration Release `
+            --runtime ${{ matrix.runtime }} `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:PublishTrimmed=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -p:SuppressTrimAnalysisWarnings=true `
+            -p:Version=$version `
+            -o ./publish/${{ matrix.output_name }}
 
       - name: Create archive (Windows)
         if: matrix.os == 'windows-latest'
