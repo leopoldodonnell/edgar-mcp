@@ -107,7 +107,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts
+          name: artifacts-${{ matrix.os }}-${{ matrix.runtime }}
           path: ${{ github.workspace }}/artifacts/
           if-no-files-found: error
           retention-days: 1
@@ -126,11 +126,24 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ./artifacts
+          pattern: 'artifacts-*'
+          merge-multiple: true
 
-      - name: Display structure of downloaded files
-        run: ls -R ./artifacts
+      - name: Prepare release artifacts
+        run: |
+          echo "Artifacts directory contents:"
+          ls -R ./artifacts
+          
+          # Create a single artifacts directory for the release
+          mkdir -p ./release-artifacts
+          
+          # Move all files from artifact directories to a single directory
+          find ./artifacts -type f -exec cp {} ./release-artifacts/ \;
+          
+          echo "\nRelease artifacts:"
+          ls -la ./release-artifacts/
 
-      - name: Determine version
+      - name: Determine version and checksums
         id: version
         run: |
           # Extract version from tag if available, otherwise use '0.0.0'
@@ -140,24 +153,36 @@ jobs:
             VERSION="0.0.0"
           fi
           
-          # Set outputs
+          # Read checksums if available
+          if [ -f "./release-artifacts/checksums.txt" ]; then
+            CHECKSUMS=$(cat ./release-artifacts/checksums.txt)
+            echo "checksums<<EOF" >> $GITHUB_OUTPUT
+            echo "$CHECKSUMS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "WARNING: No checksums file found"
+            echo "checksums=No checksums available" >> $GITHUB_OUTPUT
+          fi
+          
+          # Set version outputs
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           
           # Log the determined version
           echo "Using version: $VERSION"
 
-      - name: Verify Artifacts
+      - name: Generate checksums
+        id: checksums
         run: |
           echo "Artifacts directory contents:"
-          ls -la ${{ github.workspace }}/artifacts/
+          ls -la ./release-artifacts/
           
           echo "\nArtifact files to be uploaded:"
-          find ${{ github.workspace }}/artifacts/ -type f -name "*.tar.gz" -o -name "*.zip" | xargs ls -la
+          find ./release-artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) | xargs ls -la
           
           # Generate SHA256 checksums
           echo "Generating SHA256 checksums..."
-          cd ${{ github.workspace }}/artifacts/
+          cd ./release-artifacts/
           find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec shasum -a 256 {} \; > checksums.txt
           
           echo "\nGenerated checksums:"
@@ -168,6 +193,12 @@ jobs:
             echo "Error: No artifact files found or checksums could not be generated!"
             exit 1
           fi
+          
+          # Set checksums as output
+          CHECKSUMS=$(cat checksums.txt)
+          echo "checksums<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHECKSUMS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         id: create_release
@@ -201,25 +232,29 @@ jobs:
             - **Linux (x64)**: [edgar-mcp-linux-x64-v${{ steps.version.outputs.version }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/edgar-mcp-linux-x64-v${{ steps.version.outputs.version }}.tar.gz)
             - **Linux (ARM64)**: [edgar-mcp-linux-arm64-v${{ steps.version.outputs.version }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/edgar-mcp-linux-arm64-v${{ steps.version.outputs.version }}.tar.gz)
             
-            ### Verifying Downloads
+            ## 🔒 Checksums
             
-            You can verify the integrity of downloaded files using the SHA256 checksums provided below. To generate a checksum:
+            Verify the integrity of downloaded files using these SHA256 checksums:
             
-            ```bash
-            # On macOS/Linux
-            shasum -a 256 <filename>
-            
-            # On Windows (PowerShell)
-            Get-FileHash -Algorithm SHA256 <filename>
+            ```
+            ${{ steps.checksums.outputs.checksums }}
             ```
             
-            Compare the output with the checksums provided in the `checksums.txt` file attached to this release.
+            Example verification command (macOS/Linux):
+            ```bash
+            echo "<checksum>  <filename>" | shasum -a 256 --check
+            ```
+            
+            Example verification command (PowerShell):
+            ```powershell
+            (Get-FileHash <filename> -Algorithm SHA256).Hash -eq "<checksum>"
+            ```
           draft: false
           prerelease: false
           generate_release_notes: true
           files: |
-            ${{ github.workspace }}/artifacts/edgar-mcp-*.tar.gz
-            ${{ github.workspace }}/artifacts/edgar-mcp-*.zip
-            ${{ github.workspace }}/artifacts/checksums.txt
+            ./release-artifacts/edgar-mcp-*.tar.gz
+            ./release-artifacts/edgar-mcp-*.zip
+            ./release-artifacts/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
